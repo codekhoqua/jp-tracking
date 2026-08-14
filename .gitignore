@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Environment variables & secrets
+.env
+env_vars.yaml
+service_account.json
+
+# Local data & uploads
+pet/
+drive_data/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.dockerignore
+.gcloudignore
+
+# Misc
+.claude/
+_cleanup/
