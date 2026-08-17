@@ -4569,9 +4569,10 @@ async function fetchAiInsights() {
         if (data.status === 'success' && data.insights && data.insights.length > 0) {
             container.innerHTML = '';
             
-            // Append primary items
+            // Multiply the insights to ensure they easily overflow the screen width for seamless looping
+            let itemsHtml = '';
             data.insights.forEach(insight => {
-                container.innerHTML += `
+                itemsHtml += `
                     <div class="ai-insight-item">
                         <span class="ai-insight-dot"></span>
                         ${insight}
@@ -4579,10 +4580,15 @@ async function fetchAiInsights() {
                 `;
             });
             
-            // Recalculate duration based on new width
+            // Repeat 10 times to form a massive seamless chain
+            for (let i = 0; i < 10; i++) {
+                container.innerHTML += itemsHtml;
+            }
+            
+            // Recalculate duration based on half width (since animation translates -50%)
             requestAnimationFrame(() => {
-                const width = container.scrollWidth;
-                const duration = Math.max(15, width / 60); // ~60px/s
+                const halfWidth = container.scrollWidth / 2;
+                const duration = Math.max(15, halfWidth / 60); // ~60px/s
                 container.style.setProperty('--marquee-duration', duration + 's');
             });
         }

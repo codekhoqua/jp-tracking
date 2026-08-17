@@ -966,7 +966,7 @@
                 }
 
                 100% {
-                    transform: translateX(-100%);
+                    transform: translateX(-50%);
                 }
             }
 
@@ -1014,7 +1014,6 @@
                 align-items: center;
                 white-space: nowrap;
                 width: max-content;
-                padding-left: 100%;
                 animation: marqueeScroll var(--marquee-duration, 30s) linear infinite;
             }
 
@@ -1072,8 +1071,8 @@
             requestAnimationFrame(() => {
                 const scroll = document.getElementById('aiInsightsScroll');
                 if (scroll) {
-                    const width = scroll.scrollWidth;
-                    const duration = Math.max(15, width / 60); // ~60px/s
+                    const halfWidth = scroll.scrollWidth / 2;
+                    const duration = Math.max(15, halfWidth / 60); // ~60px/s
                     scroll.style.setProperty('--marquee-duration', duration + 's');
                 }
             });
