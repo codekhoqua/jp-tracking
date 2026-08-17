@@ -341,7 +341,7 @@
             style="border-radius: var(--radius-sm); margin-right: 8px;">
         <div style="display: flex; flex-direction: column; justify-content: center;">
             <span>JP-Tracking</span>
-            <sup style="color: var(--text-3); font-size: 10px; margin-top: 2px;"><i>v1.1.101</i></sup>
+            <sup style="color: var(--text-3); font-size: 10px; margin-top: 2px;"><i>v1.1.106</i></sup>
         </div>
     </div>
 
@@ -2057,7 +2057,6 @@
 </main>
 
 <!-- ============ MODALS FOR LOGTIME / CHECKLIST ============ -->
-{% if not is_vn_task %}
 {% for tab_key in ['truoc', 'nay', 'sau'] %}
 {% for row in weeks[tab_key].tasks %}
 {% set tp_key = row['tp_key'] %}
@@ -2122,8 +2121,9 @@
             </button>
         </div>
         <div class="modal-body">
-            {{ render_checklist(tp_key, tab_key ~ '_' ~ loop.index0, lang, checklist_api, checked_ids_dict) }}
+            {{ render_checklist(tp_key, tab_key ~ '_' ~ loop.index0, lang, checklist_api, checked_ids_dict, is_readonly=is_vn_task) }}
             
+            {% if not is_vn_task %}
             {% if logtime_data and tp_key in logtime_data %}
             <div class="logtime-summary-box">
                 <div class="logtime-header">
@@ -2153,12 +2153,12 @@
             {% endif %}
 
             {{ render_logtime_form(row, tab_key ~ '_' ~ loop.index0, t, users, lang) }}
+            {% endif %}
         </div>
     </div>
 </div>
 {% endfor %}
 {% endfor %}
-{% endif %}
 
 
 

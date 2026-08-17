@@ -431,7 +431,7 @@ DICT_LANG = {
         'logtime_title': "⏱️ KHU VỰC BÁO CÁO TIẾN ĐỘ (LOGTIME & CHECKLIST)",
         'logtime_empty': "Hiện không có task nào để logtime.",
         'f_date': "📅 Ngày làm việc:", 'f_cat': "📚 Loại truyện:", 'f_diff': "🔥 Độ khó:", 'f_worker': "👤 Người làm:",
-        'f_hours': "⏳ Giờ làm hôm nay:", 'f_pages': "📄 Số page HT (Tổng: {total}):", 'f_note': "📝 Ghi chú thêm:",
+        'f_hours': "⏱ Giờ làm hôm nay:", 'f_total_pages': "📄 Tổng số trang:", 'f_pages': "✅ Số page HT:", 'f_note': "📝 Ghi chú thêm:",
         'f_btn': "Lưu Logtime",
     },
     'ja': {
@@ -448,7 +448,7 @@ DICT_LANG = {
         'logtime_title': "⏱️ 進捗報告エリア (ログタイム＆チェックリスト)",
         'logtime_empty': "現在、報告するタスクはありません。",
         'f_date': "📅 作業日:", 'f_cat': "📚 カテゴリ:", 'f_diff': "🔥 難易度:", 'f_worker': "👤 作業者:",
-        'f_hours': "⏳ 今日の作業時間:", 'f_pages': "📄 完了ページ数 (計: {total}):", 'f_note': "📝 備考:",
+        'f_hours': "⏱ 今日の作業時間:", 'f_total_pages': "📄 ページ数:", 'f_pages': "✅ 完了したページ数:", 'f_note': "📝 備考:",
         'f_btn': "保存する",
     }
 }
@@ -473,7 +473,7 @@ CHECKLIST_TEXT = {
 # =====================================================================
 # 7. JINJA2 HELPER FUNCTIONS (Render checklist & logtime inline)
 # =====================================================================
-def render_checklist_html(tac_pham_key, index, lang, api_url, checked_ids=None):
+def render_checklist_html(tac_pham_key, index, lang, api_url, checked_ids=None, is_readonly=False):
     l = CHECKLIST_TEXT.get(lang, CHECKLIST_TEXT['vi'])
     if checked_ids is None:
         checked_ids = set()
@@ -481,7 +481,47 @@ def render_checklist_html(tac_pham_key, index, lang, api_url, checked_ids=None):
         checked_ids = set(str(x).strip().lower() for x in checked_ids)
 
     def ch(tid):
-        return 'checked' if tid in checked_ids else ''
+        attr = 'checked' if tid in checked_ids else ''
+        if is_readonly: attr += ' disabled'
+        return attr
+
+    btn_t3 = "" if is_readonly else f"""<button class="btn-copy" onclick="copyText(this, 'msg_t3_{index}')">{l['copy_start']}</button>"""
+    btn_t6 = "" if is_readonly else f"""<button class="btn-copy" onclick="copyText(this, 'msg_t6_{index}')">{l['copy_done']}</button>"""
+    btn_t8 = "" if is_readonly else f"""<button class="btn-copy" onclick="copyText(this, 'msg_t8_{index}')">{l['copy_deliver']}</button>"""
+    
+    ask_task_html = "" if is_readonly else f'''<div class="ask-task-toggle" onclick="toggleAskTask(this)">▸ {l['ask_task']}</div>
+            <div class="ask-task-content">
+                <div class="snippet-box" id="jp_t3_{index}">お疲れ様です。\\n写植工程を担当しております○○です。\\n本日が作業開始日となっておりますが、現時点でまだご指示をいただいておりません。\\nお手数をおかけいたしますが、ご確認のほどよろしくお願いいたします。</div>
+                <button class="btn-copy" onclick="copyText(this, 'jp_t3_{index}')">{l['copy_ask']}</button>
+            </div>'''
+            
+    tracker_html = "" if is_readonly else f'''<div class="time-tracker-box" id="tracker_{index}" data-tp-key="{tac_pham_key}">
+        <div class="tracker-header">
+            ⏱️ { "Theo dõi thời gian" if lang == "vi" else "タイムトラッカー" }
+            <label style="float: right; font-size: 0.8rem; font-weight: normal; cursor: pointer; color: var(--text-2);">
+                <input type="checkbox" id="manual_time_cb_{index}" onchange="toggleManualTime('{index}')"> { "Nhập tay" if lang == "vi" else "手動入力" }
+            </label>
+        </div>
+        
+        <div class="tracker-controls" id="auto_controls_{index}">
+            <button class="btn-tracker start" id="btn_start_{index}" onclick="startTracker('{index}')">▶ { "Bắt đầu" if lang == "vi" else "開始" }</button>
+            <button class="btn-tracker end" id="btn_end_{index}" onclick="endTracker('{index}')" disabled>⏹ { "Kết thúc" if lang == "vi" else "終了" }</button>
+            <span class="tracker-time" id="time_display_{index}">00:00:00</span>
+        </div>
+        
+        <div class="tracker-controls" id="manual_controls_{index}" style="display: none;">
+            <input type="text" id="manual_start_{index}" class="tracker-note" style="width: 140px;" placeholder="{ "Chọn Giờ Bắt Đầu" if lang == "vi" else "開始時刻" }">
+            <span style="color: var(--text-2);">→</span>
+            <input type="text" id="manual_end_{index}" class="tracker-note" style="width: 140px;" placeholder="{ "Chọn Giờ Kết Thúc" if lang == "vi" else "終了時刻" }">
+            <span style="color: var(--text-2);">{ "hoặc" if lang == "vi" else "または" }</span>
+            <input type="number" id="manual_duration_{index}" class="tracker-note" style="width: 80px;" step="0.01" placeholder="{ "Giờ (h)" if lang == "vi" else "時間 (h)" }" oninput="calcManualTime('{index}', 'dur')">
+        </div>
+
+        <div class="tracker-inputs">
+            <input type="text" id="tracker_note_{index}" placeholder="{ "Mô tả công việc..." if lang == "vi" else "備考..." }" class="tracker-note">
+            <button class="btn-tracker save" id="btn_save_{index}" onclick="saveTracker('{index}', '{tac_pham_key}')">{ "Lưu Log" if lang == "vi" else "保存" }</button>
+        </div>
+    </div>'''
 
     return f'''
     <div class="checklist-grid" data-tp-key="{tac_pham_key}">
@@ -494,12 +534,8 @@ def render_checklist_html(tac_pham_key, index, lang, api_url, checked_ids=None):
             <div class="step-header">{l['step2']}</div>
             <div class="task-row"><span class="platform-badge asana">Asana</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t3" {ch('t3')}><span class="checkmark"></span><span class="action-text">{l['t3']}</span></label></div>
             <div class="snippet-box" id="msg_t3_{index}">(PC) cc @Shiori Fujimura @Miho Osada @Erika Kawasaki\n===タスク着手===</div>
-            <button class="btn-copy" onclick="copyText(this, 'msg_t3_{index}')">{l['copy_start']}</button>
-            <div class="ask-task-toggle" onclick="toggleAskTask(this)">▸ {l['ask_task']}</div>
-            <div class="ask-task-content">
-                <div class="snippet-box" id="jp_t3_{index}">お疲れ様です。\n写植工程を担当しております○○です。\n本日が作業開始日となっておりますが、現時点でまだご指示をいただいておりません。\nお手数をおかけいたしますが、ご確認のほどよろしくお願いいたします。</div>
-                <button class="btn-copy" onclick="copyText(this, 'jp_t3_{index}')">{l['copy_ask']}</button>
-            </div>
+            {btn_t3}
+            {ask_task_html}
             <div class="task-row"><span class="platform-badge sheet">Sheet</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t4" {ch('t4')}><span class="checkmark"></span><span class="action-text">{l['t4']}</span></label></div>
             <div class="task-row"><span class="platform-badge notion">Notion</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t5" {ch('t5')}><span class="checkmark"></span><span class="action-text">{l['t5']}</span></label></div>
         </div>
@@ -507,42 +543,16 @@ def render_checklist_html(tac_pham_key, index, lang, api_url, checked_ids=None):
             <div class="step-header">{l['step3']}</div>
             <div class="task-row"><span class="platform-badge asana">Asana</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t6" {ch('t6')}><span class="checkmark"></span><span class="action-text">{l['t6']}</span></label></div>
             <div class="snippet-box" id="msg_t6_{index}">(PC) cc @Shiori Fujimura @Miho Osada @Erika Kawasaki\n===タスク完了===</div>
-            <button class="btn-copy" onclick="copyText(this, 'msg_t6_{index}')">{l['copy_done']}</button>
+            {btn_t6}
             <div class="task-row"><span class="platform-badge sheet">Sheet</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t7" {ch('t7')}><span class="checkmark"></span><span class="action-text">{l['t7']}</span></label></div>
             <div class="task-row"><span class="platform-badge notion">Notion</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t8" {ch('t8')}><span class="checkmark"></span><span class="action-text">{l['t8']}</span></label></div>
             <div class="snippet-box" id="msg_t8_{index}">納品いたしました。\nご確認のほどよろしくお願いいたします。</div>
-            <button class="btn-copy" onclick="copyText(this, 'msg_t8_{index}')">{l['copy_deliver']}</button>
+            {btn_t8}
             <div class="task-row"><span class="platform-badge mikan">Mikan</span><label class="check-label"><input type="checkbox" data-checklist data-check-id="t9" {ch('t9')}><span class="checkmark"></span><span class="action-text">{l['t9']}</span></label></div>
         </div>
     </div>
     
-    <div class="time-tracker-box" id="tracker_{index}" data-tp-key="{tac_pham_key}">
-        <div class="tracker-header">
-            ⏱️ { 'Theo dõi thời gian' if lang == 'vi' else 'タイムトラッカー' }
-            <label style="float: right; font-size: 0.8rem; font-weight: normal; cursor: pointer; color: var(--text-2);">
-                <input type="checkbox" id="manual_time_cb_{index}" onchange="toggleManualTime('{index}')"> { 'Nhập tay' if lang == 'vi' else '手動入力' }
-            </label>
-        </div>
-        
-        <div class="tracker-controls" id="auto_controls_{index}">
-            <button class="btn-tracker start" id="btn_start_{index}" onclick="startTracker('{index}')">▶ { 'Bắt đầu' if lang == 'vi' else '開始' }</button>
-            <button class="btn-tracker end" id="btn_end_{index}" onclick="endTracker('{index}')" disabled>⏹ { 'Kết thúc' if lang == 'vi' else '終了' }</button>
-            <span class="tracker-time" id="time_display_{index}">00:00:00</span>
-        </div>
-        
-        <div class="tracker-controls" id="manual_controls_{index}" style="display: none;">
-            <input type="text" id="manual_start_{index}" class="tracker-note" style="width: 140px;" placeholder="{ 'Chọn Giờ Bắt Đầu' if lang == 'vi' else '開始時刻' }">
-            <span style="color: var(--text-2);">→</span>
-            <input type="text" id="manual_end_{index}" class="tracker-note" style="width: 140px;" placeholder="{ 'Chọn Giờ Kết Thúc' if lang == 'vi' else '終了時刻' }">
-            <span style="color: var(--text-2);">{ 'hoặc' if lang == 'vi' else 'または' }</span>
-            <input type="number" id="manual_duration_{index}" class="tracker-note" style="width: 80px;" step="0.01" placeholder="{ 'Giờ (h)' if lang == 'vi' else '時間 (h)' }" oninput="calcManualTime('{index}', 'dur')">
-        </div>
-
-        <div class="tracker-inputs">
-            <input type="text" id="tracker_note_{index}" placeholder="{ 'Mô tả công việc...' if lang == 'vi' else '備考...' }" class="tracker-note">
-            <button class="btn-tracker save" id="btn_save_{index}" onclick="saveTracker('{index}', '{tac_pham_key}')">{ 'Lưu Log' if lang == 'vi' else '保存' }</button>
-        </div>
-    </div>
+    {tracker_html}
     '''
 
 def render_logtime_form_html(row, index, t, users, lang):
@@ -567,7 +577,6 @@ def render_logtime_form_html(row, index, t, users, lang):
             <input type="hidden" name="tac_pham" value="{tac_pham}">
             <input type="hidden" name="chuong" value="{chuong if pd.notna(chuong) else ''}">
             <input type="hidden" name="tap" value="{tap if pd.notna(tap) else ''}">
-            <input type="hidden" name="so_trang_tong" value="{so_trang}">
             <div class="form-row cols-4">
                 <div class="form-group">
                     <label>{t['f_cat']}</label>
@@ -586,13 +595,17 @@ def render_logtime_form_html(row, index, t, users, lang):
                     <input type="date" name="ngay_log" value="{today}">
                 </div>
             </div>
-            <div class="form-row cols-3">
+            <div class="form-row cols-4">
                 <div class="form-group">
                     <label>{t['f_hours']}</label>
                     <input type="number" name="so_gio" min="0" step="0.5">
                 </div>
                 <div class="form-group">
-                    <label>{t['f_pages'].format(total=so_trang)}</label>
+                    <label>{t['f_total_pages']}</label>
+                    <input type="number" name="so_trang_tong" value="{so_trang}" min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label>{t['f_pages']}</label>
                     <input type="number" name="so_page" min="0" step="1">
                 </div>
                 <div class="form-group">
@@ -617,9 +630,9 @@ def render_logtime_form_html(row, index, t, users, lang):
 # Register template helpers
 @app.context_processor
 def utility_processor():
-    def render_checklist(tp_key, idx, lang, api_url, checked_ids_dict=None):
+    def render_checklist(tp_key, idx, lang, api_url, checked_ids_dict=None, is_readonly=False):
         ids = (checked_ids_dict or {}).get(tp_key, [])
-        return Markup(render_checklist_html(tp_key, idx, lang, api_url, ids))
+        return Markup(render_checklist_html(tp_key, idx, lang, api_url, ids, is_readonly))
     def render_logtime_form(row, idx, t, users, lang):
         return Markup(render_logtime_form_html(row, idx, t, users, lang))
     return dict(render_checklist=render_checklist, render_logtime_form=render_logtime_form)
