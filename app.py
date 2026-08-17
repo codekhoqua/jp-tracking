@@ -1174,7 +1174,25 @@ def api_insights():
         except Exception as e:
             print(f"Weather prediction error in insights API: {e}")
             
-        # 2. LLM / Fallback Insights
+        # 2. Basic Insights (always run to populate ticker)
+        if total_truoc > 0:
+            diff = ((total_nay - total_truoc) / total_truoc) * 100
+            if diff > 0:
+                insights.append(f"📈 Khối lượng task tăng {diff:.0f}% so với tuần trước." if is_vi else f"📈 今週のタスク量は先週より{diff:.0f}%増加。")
+            elif diff < 0:
+                insights.append(f"📉 Khối lượng task giảm {-diff:.0f}% so với tuần trước." if is_vi else f"📉 今週のタスク量は先週より{-diff:.0f}%減少。")
+        
+        if total_nay > 0:
+            completion_rate = (completed / total_nay) * 100
+            if completion_rate >= 80:
+                insights.append(f"🔥 Tuyệt vời! Đã hoàn thành {completion_rate:.0f}% công việc." if is_vi else f"🔥 素晴らしい！タスクの{completion_rate:.0f}%が完了しました。")
+            elif completion_rate > 0:
+                insights.append(f"📊 Tiến độ: {completion_rate:.0f}% task đã hoàn thành." if is_vi else f"📊 現在の進捗：タスクの{completion_rate:.0f}%が完了。")
+                
+        if not_started > 0:
+            insights.append(f"⚠️ Chú ý: Còn {not_started} task chưa bắt đầu." if is_vi else f"⚠️ 注意：まだ開始されていないタスクが{not_started}件。")
+
+        # 3. LLM Insights
         groq_api_key = os.environ.get('GROQ_API_KEY', '')
         if groq_api_key:
             # Use Groq to generate a smart insight
@@ -1205,25 +1223,6 @@ def api_insights():
                     raise Exception("Groq non-200 response")
             except Exception as e:
                 print(f"Groq API error in insights: {e}")
-                
-        # If Groq failed or key missing, use fallback basic insight
-        if len(insights) <= 1: # Only weather exists
-            if total_truoc > 0:
-                diff = ((total_nay - total_truoc) / total_truoc) * 100
-                if diff > 0:
-                    insights.append(f"📈 Khối lượng task tăng {diff:.0f}% so với tuần trước." if is_vi else f"📈 今週のタスク量は先週より{diff:.0f}%増加。")
-                elif diff < 0:
-                    insights.append(f"📉 Khối lượng task giảm {-diff:.0f}% so với tuần trước." if is_vi else f"📉 今週のタスク量は先週より{-diff:.0f}%減少。")
-            
-            if total_nay > 0:
-                completion_rate = (completed / total_nay) * 100
-                if completion_rate >= 80:
-                    insights.append(f"🔥 Tuyệt vời! Đã hoàn thành {completion_rate:.0f}% công việc." if is_vi else f"🔥 素晴らしい！タスクの{completion_rate:.0f}%が完了しました。")
-                elif completion_rate > 0:
-                    insights.append(f"📊 Tiến độ: {completion_rate:.0f}% task đã hoàn thành." if is_vi else f"📊 現在の進捗：タスクの{completion_rate:.0f}%が完了。")
-                    
-            if not_started > 0:
-                insights.append(f"⚠️ Chú ý: Còn {not_started} task chưa bắt đầu." if is_vi else f"⚠️ 注意：まだ開始されていないタスクが{not_started}件。")
                 
         return jsonify({"status": "success", "insights": insights})
     except Exception as e:
