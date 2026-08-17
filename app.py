@@ -68,6 +68,12 @@ CHANGE_PASS_API = "https://script.google.com/macros/s/AKfycbzZ--vv1xsR8u5pFKFqK7
 LOGTIME_API_URL = "https://script.google.com/macros/s/AKfycbzZ--vv1xsR8u5pFKFqK7N_PCYwGnpl-yvyOVt15rXSoI99hJTwQV5WBXXMXiGMApljig/exec"
 
 url = "https://docs.google.com/spreadsheets/d/1EvTrNJx7dBO5pK58sc25WXkKPMTCJogzpMRz_e-Tr0k/edit"
+
+VN_CSV_URL = "https://docs.google.com/spreadsheets/d/1ec_v1hsKu0oCOwyrFNgxckpoaq3Q02J4NdIchqbYE3s/export?format=csv"
+VN_CSV_TRUOC_URL = "https://docs.google.com/spreadsheets/d/1ec_v1hsKu0oCOwyrFNgxckpoaq3Q02J4NdIchqbYE3s/export?format=csv&gid=597870203"
+VN_USER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1VLlDF5XoXt0Rz0ACZ3EZRKcKWFnIRXptMPbQthimNE0/export?format=csv&gid=0"
+VN_TASK_URL = "https://docs.google.com/spreadsheets/d/1ec_v1hsKu0oCOwyrFNgxckpoaq3Q02J4NdIchqbYE3s/gviz/tq?tqx=out:csv&sheet=VN-task"
+
 csv_url = "https://docs.google.com/spreadsheets/d/1EvTrNJx7dBO5pK58sc25WXkKPMTCJogzpMRz_e-Tr0k/gviz/tq?tqx=out:csv&sheet=JP+Main+week"
 
 url_after_week = "https://docs.google.com/spreadsheets/d/1EvTrNJx7dBO5pK58sc25WXkKPMTCJogzpMRz_e-Tr0k/edit"
@@ -3293,6 +3299,298 @@ def compare_psd():
         return jsonify({'success': True, 'message': f'Đã chuyển {moved_count} file PSD thành công!'})
     except Exception as e:
         return jsonify({'error': f'Có lỗi xảy ra: {str(e)}'}), 500
+
+def process_vn_dashboard_data():
+    lang = session.get('lang', 'ja')
+    user = session.get('user')
+    role = session.get('role', 'member')
+    t = DICT_LANG.get(lang, DICT_LANG['ja'])
+
+    try:
+        import pandas as pd
+        df_raw = load_sheet_data(VN_CSV_URL)
+        df_truoc_raw = load_sheet_data(VN_CSV_TRUOC_URL)
+    except Exception:
+        return None
+
+    if df_raw.empty:
+        return None
+
+    idx_tuan = df_raw[df_raw.apply(lambda row: row.astype(str).str.contains('Tuần làm việc|Tuần|TUẦN', case=False, na=False).any(), axis=1)].index
+    idx_tuan_truoc = df_truoc_raw[df_truoc_raw.apply(lambda row: row.astype(str).str.contains('Tuần làm việc|Tuần|TUẦN', case=False, na=False).any(), axis=1)].index
+
+    def parse_week_info(df_source, idx_list):
+        info = {"start": t['not_update'], "end": t['not_update'], "deadline": t['not_update']}
+        if len(idx_list) > 0:
+            start_idx = idx_list[0]
+            for i in range(start_idx, min(start_idx + 5, len(df_source))):
+                row_vals = df_source.iloc[i].dropna().astype(str).str.strip().tolist()
+                dates = get_clean_dates(row_vals)
+                if any('tuần' in str(v).lower() for v in row_vals) and len(dates) >= 2:
+                    info['start'], info['end'] = dates[0], dates[1]
+                if any(kw in str(v).lower() for v in row_vals for kw in ['deadline', 'deadlien', 'hạn chót']) and len(dates) >= 1:
+                    info['deadline'] = dates[-1]
+        return info
+
+    def load_vn_checklist_data():
+        try:
+            import requests, pandas as pd
+            VN_SUPABASE_URL = os.environ.get('VN_SUPABASE_URL', '')
+            VN_SUPABASE_SERVICE_KEY = os.environ.get('VN_SUPABASE_SERVICE_KEY', '')
+            VN_SUPABASE_BUCKET = 'drive'
+            headers = {'Authorization': f'Bearer {VN_SUPABASE_SERVICE_KEY}', 'apikey': VN_SUPABASE_SERVICE_KEY}
+            r = requests.get(f'{VN_SUPABASE_URL}/storage/v1/object/{VN_SUPABASE_BUCKET}/_system/checklists.json', headers=headers, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+        except Exception as e:
+            print("Failed to load VN checklist:", e)
+            data = {}
+
+        rows = []
+        for tp_key, cbs in data.items():
+            for cb_id, status in cbs.items():
+                rows.append({
+                    'Tên Tác Phẩm': tp_key,
+                    'Checkbox ID': cb_id,
+                    'Trạng Thái': status,
+                    'Thời Gian': ''
+                })
+        import pandas as pd
+        if rows:
+            return pd.DataFrame(rows)
+        return pd.DataFrame(columns=['Tên Tác Phẩm', 'Checkbox ID', 'Trạng Thái', 'Thời Gian'])
+
+    info_nay = parse_week_info(df_raw, idx_tuan[:1])
+    info_sau = parse_week_info(df_raw, idx_tuan[1:2])
+    info_truoc = parse_week_info(df_truoc_raw, idx_tuan_truoc[:1])
+
+    if len(idx_tuan) > 1:
+        df_tuan_nay = clean_df(df_raw.iloc[idx_tuan[0]:idx_tuan[1]].copy())
+    elif len(idx_tuan) > 0:
+        df_tuan_nay = clean_df(df_raw.iloc[idx_tuan[0]:].copy())
+    else:
+        df_tuan_nay = df_raw.copy()
+
+    df_tuan_sau = clean_df(df_raw.iloc[idx_tuan[1]:].copy()) if len(idx_tuan) > 1 else pd.DataFrame(columns=df_raw.columns)
+    df_tuan_truoc = clean_df(df_truoc_raw.iloc[idx_tuan_truoc[0]:].copy()) if len(idx_tuan_truoc) > 0 else clean_df(df_truoc_raw)
+
+    if role == "member":
+        df_tuan_nay = df_tuan_nay[df_tuan_nay["Người thực hiện"].astype(str).str.contains(user, na=False, regex=False)]
+        df_tuan_sau = df_tuan_sau[df_tuan_sau["Người thực hiện"].astype(str).str.contains(user, na=False, regex=False)]
+        df_tuan_truoc = df_tuan_truoc[df_tuan_truoc["Người thực hiện"].astype(str).str.contains(user, na=False, regex=False)]
+
+    df_check = load_vn_checklist_data()
+    check_counts = {}
+    checked_ids_dict = {}
+    if not df_check.empty:
+        df_check['Trạng Thái'] = df_check['Trạng Thái'].astype(str).str.upper().isin(['TRUE', '1', 'T'])
+        df_check_latest = df_check.drop_duplicates(subset=['Tên Tác Phẩm', 'Checkbox ID'], keep='last')
+        check_counts = df_check_latest[df_check_latest['Trạng Thái'] == True].groupby('Tên Tác Phẩm')['Checkbox ID'].nunique().to_dict()
+        checked_ids_dict = df_check_latest[df_check_latest['Trạng Thái'] == True].groupby('Tên Tác Phẩm')['Checkbox ID'].apply(list).to_dict()
+
+    def df_to_records(df_target):
+        if df_target.empty:
+            return []
+        records = df_target.to_dict('records')
+        for r in records:
+            cv = str(r.get('Công việc', '')).strip()
+            tp = str(r.get('Tên tác phẩm', '')).strip()
+            tap = str(r.get('Tập', '')).strip()
+            if tap.endswith('.0'): tap = tap[:-2]
+            
+            if tap and tap.lower() not in ['nan', 'none', '']:
+                old_tp_key = f"{tap}_{tp}"
+                tp_key = f"{cv} - {tap}_{tp}"
+            else:
+                old_tp_key = f"{tp}"
+                tp_key = f"{cv} - {tp}"
+                
+            r['tp_key'] = tp_key
+            r['tp_name'] = tp_key
+            
+            if old_tp_key in checked_ids_dict:
+                existing = set(checked_ids_dict.get(tp_key, []))
+                merged = list(existing.union(checked_ids_dict[old_tp_key]))
+                checked_ids_dict[tp_key] = merged
+                check_counts[tp_key] = len(merged)
+        return records
+
+    def build_dashboard(df_target):
+        data = []
+        import re, dateutil.parser as date_parser
+        from datetime import date, datetime
+        current_year = date.today().year
+        def format_jp_date(d_str):
+            if not d_str or str(d_str) in ['nan', 'NaN', 'None', '']: return ''
+            clean_d = re.sub(r'\([A-Za-z]+\)', '', str(d_str)).strip().replace('-', ' ')
+            try:
+                dt = date_parser.parse(clean_d, default=datetime(current_year, 1, 1))
+                return dt.strftime('%m/%d/%Y')
+            except:
+                return str(d_str)
+        records = df_to_records(df_target)
+        for row in records:
+            tp_key = row['tp_key']
+            tp_name = row['tp_name']
+            worker = str(row.get('Người thực hiện', '')).strip()
+            qc_person = str(row.get('QC Nội bộ', '')).strip()
+            checked = check_counts.get(tp_key, 0)
+            checked_ids = ','.join(checked_ids_dict.get(tp_key, []))
+
+            if checked == 0:
+                status, status_class = "⏳ Chưa Bắt Đầu", "not-started"
+            elif checked >= 9:
+                status, status_class = "✅ Đã Giao Hàng", "delivered"
+            else:
+                status, status_class = "🔥 Đang Tiến Hành", "in-progress"
+            progress = int((checked / 9) * 100)
+
+            cv = str(row.get('Công việc', '')).strip()
+            if '写植/ﾚﾀｯﾁ' in cv or '写植/レタッチ' in cv or 'Lettering/Retouch' in cv: job_type = 'Lettering/Retouch'
+            elif '修正' in cv or 'Lettering QC' in cv: job_type = 'Lettering QC'
+            elif '写植' in cv or 'Lettering' in cv: job_type = 'Lettering'
+            elif 'レタッチ' in cv or 'ﾚﾀｯﾁ' in cv or 'Retouch' in cv: job_type = 'Retouch'
+            else: job_type = 'Prep'
+            
+            start_date = format_jp_date(str(row.get('Ngày bắt đầu', '')).strip())
+            end_date = format_jp_date(str(row.get('Deadline (Nộp)', '')).strip())
+            
+            data.append({"key": tp_key, "name": tp_name, "worker": worker, "qc_person": qc_person, "progress": progress, "status": status, "status_class": status_class, "checked_ids": checked_ids, "job_type": job_type, "start_date": start_date, "end_date": end_date})
+        return data
+
+    def get_metrics(df_target):
+        return {
+            "total": len(df_target),
+            "retouch": len(df_target[df_target["Công việc"].astype(str).str.contains('レタッチ|ﾚﾀｯﾁ|Retouch', na=False, regex=True)]),
+            "lettering": len(df_target[df_target["Công việc"].astype(str).str.contains('写植|Lettering', na=False, regex=True) & ~df_target["Công việc"].astype(str).str.contains('修正|Lettering QC', na=False, regex=True)]),
+            "lettering_qc": len(df_target[df_target["Công việc"].astype(str).str.contains('修正|Lettering QC', na=False, regex=True)]),
+            "lettering_retouch": len(df_target[df_target["Công việc"].astype(str).str.contains('写植/ﾚﾀｯﾁ|写植/レタッチ|Lettering/Retouch', na=False, regex=True)]),
+            "prep": len(df_target[~df_target["Công việc"].astype(str).str.contains('レタッチ|ﾚﾀｯﾁ|Retouch|写植|Lettering', na=False, regex=True)])
+        }
+
+    USER_DB_JP = load_users_from_sheet(USER_SHEET_URL)
+    USER_DB_VN = load_users_from_sheet(VN_USER_SHEET_URL)
+    USER_DB = {**USER_DB_JP, **USER_DB_VN}
+    users = list(USER_DB.keys())
+    
+    dash_nay = build_dashboard(df_tuan_nay)
+    dash_truoc = build_dashboard(df_tuan_truoc)
+    dash_sau = build_dashboard(df_tuan_sau)
+
+    return {
+        'user': user,
+        'role': role,
+        'lang': lang,
+        't': t,
+        'users': users,
+        'user_profiles': USER_DB,
+        'cols_keys': COLS,
+        'checklist_api': '',
+        'checked_ids_dict': checked_ids_dict,
+        'filter_cv_nay': list(df_tuan_nay["Công việc"].dropna().unique()) if not df_tuan_nay.empty else [],
+        'filter_cv_sau': list(df_tuan_sau["Công việc"].dropna().unique()) if not df_tuan_sau.empty else [],
+        'weeks': {
+            'truoc': {
+                'info': info_truoc,
+                'tasks': df_to_records(df_tuan_truoc),
+                'dashboard': dash_truoc,
+                'metrics': get_metrics(df_tuan_truoc),
+            },
+            'nay': {
+                'info': info_nay,
+                'tasks': df_to_records(df_tuan_nay),
+                'dashboard': dash_nay,
+                'metrics': get_metrics(df_tuan_nay),
+            },
+            'sau': {
+                'info': info_sau,
+                'tasks': df_to_records(df_tuan_sau),
+                'dashboard': dash_sau,
+                'metrics': get_metrics(df_tuan_sau),
+            }
+        },
+        'logtime_data': [],
+        'is_vn_task': True
+    }
+
+@app.route('/vn-task')
+def vn_task_view():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    if session.get('role') != 'admin':
+        return redirect('/dashboard')
+    
+    data = process_vn_dashboard_data()
+    if data is None:
+        data = {
+            'user': session.get('user'),
+            'role': session.get('role', 'member'),
+            'lang': session.get('lang', 'ja'),
+            't': DICT_LANG.get(session.get('lang', 'ja'), DICT_LANG['ja']),
+            'users': [], 'user_profiles': {}, 'cols_keys': COLS,
+            'checklist_api': '', 'checked_ids_dict': {},
+            'filter_cv_nay': [], 'filter_cv_sau': [],
+            'weeks': {
+                'truoc': {'info': {}, 'tasks': [], 'dashboard': [], 'metrics': {}},
+                'nay': {'info': {}, 'tasks': [], 'dashboard': [], 'metrics': {}},
+                'sau': {'info': {}, 'tasks': [], 'dashboard': [], 'metrics': {}}
+            },
+            'logtime_data': [],
+            'is_vn_task': True
+        }
+    
+    return render_template('dashboard.html', **data)
+
+@app.route('/api/vn_chart_data')
+def api_vn_chart_data():
+    if not session.get('logged_in'):
+        return jsonify([])
+    try:
+        df = pd.read_csv(VN_TASK_URL)
+        start_date_col = None
+        for col in df.columns:
+            if '開始日' in col:
+                start_date_col = col
+                break
+        if not start_date_col and len(df.columns) > 7:
+            start_date_col = df.columns[7]
+            
+        job_col = df.columns[1] if len(df.columns) > 1 else None
+        task_col = df.columns[2] if len(df.columns) > 2 else None
+        worker_col = df.columns[10] if len(df.columns) > 10 else None
+        
+        details = []
+        current_year = date.today().year
+        for idx, row in df.iterrows():
+            val = str(row[start_date_col]).strip() if start_date_col else ''
+            if val in ['nan', 'NaN', 'None', '']: continue
+            
+            raw_job = str(row[job_col]).strip() if job_col and pd.notna(row[job_col]) else "Prep"
+            if '写植/ﾚﾀｯﾁ' in raw_job or '写植/レタッチ' in raw_job or 'Lettering/Retouch' in raw_job: job_type = 'Lettering/Retouch'
+            elif '修正写植' in raw_job or 'Lettering QC' in raw_job or '修正' in raw_job: job_type = 'Lettering QC'
+            elif 'レタッチ' in raw_job or 'ﾚﾀｯﾁ' in raw_job or 'Retouch' in raw_job: job_type = 'Retouch'
+            elif '写植' in raw_job or 'Lettering' in raw_job: job_type = 'Lettering'
+            else: job_type = 'Prep'
+            if job_type in ['nan', 'NaN', 'None', '']: job_type = "Prep"
+            
+            task_name = str(row[task_col]) if task_col and pd.notna(row[task_col]) else "Unknown Task"
+            worker = str(row[worker_col]) if worker_col and pd.notna(row[worker_col]) else ""
+            
+            clean_d = re.sub(r'\([A-Za-z]+\)', '', val).strip().replace('-', ' ')
+            try:
+                dt = date_parser.parse(clean_d, default=datetime(current_year, 1, 1))
+                details.append({
+                    "date": dt.strftime('%Y-%m-%d'),
+                    "taskName": task_name,
+                    "worker": worker,
+                    "jobType": job_type
+                })
+            except:
+                pass
+        return jsonify(details)
+    except Exception as e:
+        print("Error fetching VN chart data:", e)
+        return jsonify([])
 
 if __name__ == '__main__':
     threading.Thread(target=preload_data, daemon=True).start()

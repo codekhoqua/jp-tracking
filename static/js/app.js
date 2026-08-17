@@ -303,6 +303,15 @@ function openModal(tabKey, cardName) {
             modal.classList.add('open');
             document.body.style.overflow = 'hidden';
             initChecklistInContainer(modal.querySelector('.modal-body'));
+            
+            const dateInput = modal.querySelector('input[name="ngay_log"]');
+            if (dateInput) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                dateInput.value = `${year}-${month}-${day}`;
+            }
         }
     }
 }
@@ -627,6 +636,7 @@ var logtimeAvgTime = 3000; // Average save time in ms (starts at 3s, adapts over
 
 function handleLogtime(event, formId) {
     event.preventDefault();
+    const isVi = typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'vi';
     const form = document.getElementById(formId);
     if (!form) return;
 
@@ -647,9 +657,9 @@ function handleLogtime(event, formId) {
     if (hours === 0 && pages === 0) { showToast('⚠️ Vui lòng nhập số giờ hoặc số trang!', 'warning'); return; }
 
     const btn = form.querySelector('button[type="submit"]');
-    const orig = btn.textContent;
+    const orig = btn.innerHTML; // Keep HTML if there are icons
     btn.disabled = true;
-    btn.textContent = '⏳ ĐANG LƯU...';
+    btn.textContent = isVi ? '⏳ ĐANG LƯU...' : '⏳ 保存中...';
 
     // Show progress bar
     const formIndex = formId.replace('logtime-', '');
@@ -665,7 +675,7 @@ function handleLogtime(event, formId) {
         var estimatedMs = logtimeAvgTime;
 
         if (progressFill) progressFill.style.width = '0%';
-        if (progressLabel) progressLabel.textContent = 'Đang gửi dữ liệu lên Google Sheet...';
+        if (progressLabel) progressLabel.textContent = isVi ? 'Đang gửi dữ liệu lên Google Sheet...' : 'Googleスプレッドシートに送信中...';
         if (progressTime) progressTime.textContent = '~' + Math.ceil(estimatedMs / 1000) + 's';
 
         // Animate progress: fast at first, slows down as it approaches 90%
@@ -680,8 +690,8 @@ function handleLogtime(event, formId) {
             if (progressTime) progressTime.textContent = remaining > 0 ? '~' + remaining + 's' : '...';
 
             // Update label based on progress
-            if (pct > 60 && progressLabel) progressLabel.textContent = 'Đang lưu vào Google Sheet...';
-            if (pct > 85 && progressLabel) progressLabel.textContent = 'Sắp xong...';
+            if (pct > 60 && progressLabel) progressLabel.textContent = isVi ? 'Đang lưu vào Google Sheet...' : 'Googleスプレッドシートに保存中...';
+            if (pct > 85 && progressLabel) progressLabel.textContent = isVi ? 'Sắp xong...' : 'もうすぐ完了します...';
         }, 100);
     }
 
@@ -720,7 +730,7 @@ function handleLogtime(event, formId) {
             showToast('❌ Lỗi kết nối!', 'error');
             setTimeout(function() { if (progressEl) progressEl.style.display = 'none'; if (progressFill) { progressFill.style.width = '0%'; progressFill.style.background = 'linear-gradient(90deg, var(--primary), #818cf8)'; } }, 2000);
         })
-        .finally(() => { btn.disabled = false; btn.textContent = orig; });
+        .finally(() => { btn.disabled = false; btn.innerHTML = orig; });
 }
 
 // ===================== UTILS =====================
@@ -1093,6 +1103,7 @@ function toggleTheme() {
 
 // ===================== BACKGROUND SYNC =====================
 function backgroundSyncChecklist() {
+    if (window.IS_VN_TASK) return;
     if (true) {
         const cacheBuster = `?_t=${Date.now()}`;
         fetch('/api/checklist_sync_get' + cacheBuster)
@@ -1209,7 +1220,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Init Area Chart
     const chartLoader = document.getElementById('chart-loader');
-    fetch('/api/chart_data')
+    const apiUrl = window.IS_VN_TASK ? '/api/vn_chart_data' : '/api/chart_data';
+    fetch(apiUrl)
         .then(res => res.json())
         .then(data => {
             if (typeof vntaskDataList !== 'undefined') {
@@ -1311,16 +1323,17 @@ function closeChangePassModal() {
 }
 
 function submitChangePass() {
+    const isVi = typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'vi';
     const oldPass = document.getElementById('old-pass').value.trim();
     const newPass = document.getElementById('new-pass').value.trim();
     const confirmPass = document.getElementById('confirm-pass').value.trim();
 
     if (!oldPass || !newPass || !confirmPass) {
-        showToast('Vui lòng nhập đầy đủ thông tin!', 'error');
+        showToast(isVi ? 'Vui lòng nhập đầy đủ thông tin!' : 'すべての情報を入力してください！', 'error');
         return;
     }
     if (newPass !== confirmPass) {
-        showToast('Mật khẩu mới không khớp!', 'error');
+        showToast(isVi ? 'Mật khẩu mới không khớp!' : '新しいパスワードが一致しません！', 'error');
         return;
     }
 
@@ -1328,7 +1341,7 @@ function submitChangePass() {
     const origText = btn.innerHTML;
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 8px; display: inline-block;"></span> Đang lưu...';
+        btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 8px; display: inline-block;"></span> ' + (isVi ? 'Đang lưu...' : '保存中...');
     }
 
     fetch('/api/change-password', {
@@ -2246,14 +2259,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Realtime Checklist Sync via version polling
         // Only fetches full data when something actually changed
-        if (window.location.pathname === '/dashboard') {
+        if (window.location.pathname === '/dashboard' || window.location.pathname === '/vn-task') {
             let _lastChecklistVersion = -1;
             setInterval(() => {
                 fetch('/api/checklist_version?_t=' + Date.now())
                     .then(r => r.json())
                     .then(d => {
                         if (_lastChecklistVersion === -1) {
-                            // First load, just store the version
                             _lastChecklistVersion = d.v;
                         } else if (d.v !== _lastChecklistVersion) {
                             _lastChecklistVersion = d.v;
@@ -2263,6 +2275,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     .catch(() => {});
             }, 3000);
         }
+
+        // Realtime sync is handled via checklist_version polling without flashing the screen
 
     }
 });

@@ -341,23 +341,58 @@
             style="border-radius: var(--radius-sm); margin-right: 8px;">
         <div style="display: flex; flex-direction: column; justify-content: center;">
             <span>JP-Tracking</span>
-            <sup style="color: var(--text-3); font-size: 10px; margin-top: 2px;"><i>v1.1.87</i></sup>
+            <sup style="color: var(--text-3); font-size: 10px; margin-top: 2px;"><i>v1.1.101</i></sup>
         </div>
     </div>
 
     <div class="nav-label">MAIN</div>
-    <div class="nav-item active" style="cursor: pointer;" id="nav-dashboard">
-        <div class="nav-item-content">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="7"></rect>
-                <rect x="14" y="3" width="7" height="7"></rect>
-                <rect x="14" y="14" width="7" height="7"></rect>
-                <rect x="3" y="14" width="7" height="7"></rect>
+    {% if session.get('role') == 'admin' %}
+    <div class="nav-item active" onclick="document.getElementById('task-dropdown').classList.toggle('show'); event.stopPropagation();" style="cursor: pointer; position: relative;">
+        <div class="nav-item-content" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <span style="font-weight: 500;">{% if is_vn_task %}VN task{% else %}JP task{% endif %}</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
-            Dashboard
+        </div>
+        <div id="task-dropdown" class="task-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; background: var(--surface); border-radius: 8px; margin-top: 4px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; overflow: hidden;">
+            <a href="/dashboard" style="display: block; padding: 10px 16px; text-decoration: none; color: inherit; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">JP task</a>
+            <a href="/vn-task" style="display: block; padding: 10px 16px; text-decoration: none; color: inherit; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">VN task</a>
         </div>
     </div>
+    {% else %}
+    <a href="/dashboard" class="nav-item active" style="text-decoration: none; color: inherit;">
+        <div class="nav-item-content">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span style="font-weight: 500;">JP task</span>
+        </div>
+    </a>
+    {% endif %}
+    
+    <script>
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('task-dropdown');
+            if (dropdown && dropdown.classList.contains('show') && !e.target.closest('.nav-item')) {
+                dropdown.classList.remove('show');
+            }
+        });
+    </script>
+    <style>
+        .task-dropdown.show {
+            display: block !important;
+        }
+    </style>
+    
     <div class="nav-item" onclick="scrollToTable()">
         <div class="nav-item-content">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -373,6 +408,7 @@
         </div>
     </div>
 
+    {% if not is_vn_task %}
     <div class="nav-item" onclick="openDriveModal()">
         <div class="nav-item-content">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -399,9 +435,13 @@
             </svg>
         </div>
     </a>
+    {% endif %}
+
+    
 
     </div>
 
+    {% if not is_vn_task %}
     <div class="nav-label">{{ 'SETTINGS' if lang == 'vi' else '設定' }}</div>
     <div class="nav-item" style="overflow: visible;">
         <div class="nav-item-content">
@@ -455,6 +495,7 @@
             {{ 'Quản lý nhân viên' if lang == 'vi' else 'ユーザー管理' }}
         </div>
     </div>
+    {% endif %}
     {% endif %}
 
     <div style="flex-grow: 1;"></div>
@@ -1040,7 +1081,7 @@
 
 
     <div class="chart-section"
-        style="background: var(--bg-card); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); width: 100%;">
+        style="background: var(--surface); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); width: 100%;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3 style="color: var(--text); display: flex; align-items: center; gap: 8px; margin: 0;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -2016,6 +2057,7 @@
 </main>
 
 <!-- ============ MODALS FOR LOGTIME / CHECKLIST ============ -->
+{% if not is_vn_task %}
 {% for tab_key in ['truoc', 'nay', 'sau'] %}
 {% for row in weeks[tab_key].tasks %}
 {% set tp_key = row['tp_key'] %}
@@ -2116,6 +2158,7 @@
 </div>
 {% endfor %}
 {% endfor %}
+{% endif %}
 
 
 
@@ -2525,6 +2568,7 @@
     const CURRENT_LANG = "{{ lang }}";
     const CURRENT_USER = "{{ user }}";
     window.socket = typeof io !== 'undefined' ? io() : null;
+    window.IS_VN_TASK = {{ 'true' if is_vn_task else 'false' }};
 
     // Summary data for AI Insights API
     window.DASHBOARD_SUMMARY = {
