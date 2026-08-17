@@ -1181,16 +1181,31 @@ def api_insights():
                 insights.append(f"📈 Khối lượng task tăng {diff:.0f}% so với tuần trước." if is_vi else f"📈 今週のタスク量は先週より{diff:.0f}%増加。")
             elif diff < 0:
                 insights.append(f"📉 Khối lượng task giảm {-diff:.0f}% so với tuần trước." if is_vi else f"📉 今週のタスク量は先週より{-diff:.0f}%減少。")
+            else:
+                insights.append(f"⚖️ Khối lượng task ổn định so với tuần trước." if is_vi else f"⚖️ 今週のタスク量は先週と同じです。")
+        else:
+            insights.append(f"🚀 Một tuần mới đầy năng lượng! Hãy lập kế hoạch thật tốt nhé." if is_vi else f"🚀 新しい一週間の始まりです！計画をしっかり立てましょう。")
         
         if total_nay > 0:
             completion_rate = (completed / total_nay) * 100
-            if completion_rate >= 80:
+            if completion_rate >= 100:
+                insights.append(f"🏆 Xuất sắc! Toàn bộ công việc đã được hoàn thành 100%." if is_vi else f"🏆 素晴らしい！全てのタスクが完了しました。")
+            elif completion_rate >= 80:
                 insights.append(f"🔥 Tuyệt vời! Đã hoàn thành {completion_rate:.0f}% công việc." if is_vi else f"🔥 素晴らしい！タスクの{completion_rate:.0f}%が完了しました。")
             elif completion_rate > 0:
                 insights.append(f"📊 Tiến độ: {completion_rate:.0f}% task đã hoàn thành." if is_vi else f"📊 現在の進捗：タスクの{completion_rate:.0f}%が完了。")
+            else:
+                insights.append(f"🎯 Hãy bắt tay vào hoàn thành task đầu tiên của tuần này nhé!" if is_vi else f"🎯 今週の最初のタスクを完了させましょう！")
                 
-        if not_started > 0:
-            insights.append(f"⚠️ Chú ý: Còn {not_started} task chưa bắt đầu." if is_vi else f"⚠️ 注意：まだ開始されていないタスクが{not_started}件。")
+            in_progress = total_nay - completed - not_started
+            if in_progress > 0:
+                insights.append(f"⏳ Đang xử lý {in_progress} task, cố lên nào team!" if is_vi else f"⏳ 現在{in_progress}件のタスクが進行中です。頑張って！")
+                
+            if not_started > 0:
+                insights.append(f"⚠️ Chú ý: Còn {not_started} task chưa bắt đầu." if is_vi else f"⚠️ 注意：まだ開始されていないタスクが{not_started}件。")
+            else:
+                if completed < total_nay:
+                    insights.append(f"✨ Tuyệt vời! Tất cả các task đều đã được bắt đầu triển khai." if is_vi else f"✨ 素晴らしい！全てのタスクが開始されました。")
 
         # 3. LLM Insights
         groq_api_key = os.environ.get('GROQ_API_KEY', '')
