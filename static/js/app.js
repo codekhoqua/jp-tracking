@@ -418,7 +418,7 @@ function initChecklistInContainer(container) {
                 }
 
                 if (true) {
-                    fetch('/api/checklist_sync', {
+                    fetch(typeof CHECKLIST_API_POST !== 'undefined' && CHECKLIST_API_POST ? CHECKLIST_API_POST : '/api/checklist_sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ tac_pham: tpKey, checkbox_id: rawId, status: e.target.checked })
@@ -1103,10 +1103,9 @@ function toggleTheme() {
 
 // ===================== BACKGROUND SYNC =====================
 function backgroundSyncChecklist() {
-    if (window.IS_VN_TASK) return;
-    if (true) {
+    if (typeof CHECKLIST_API !== 'undefined' && CHECKLIST_API) {
         const cacheBuster = `?_t=${Date.now()}`;
-        fetch('/api/checklist_sync_get' + cacheBuster)
+        fetch(CHECKLIST_API + cacheBuster)
             .then(r => r.json())
             .then(data => {
                 if (!Array.isArray(data)) return;
@@ -1136,7 +1135,7 @@ function backgroundSyncChecklist() {
                     let freshCheckedIds = [];
                     for (let i = 1; i <= 9; i++) {
                         const checkId = `t${i}`;
-                        const isCheckedNew = checkedMap[tpKey] && checkedMap[tpKey][checkId];
+                        const isCheckedNew = (checkedMap[tpKey] && checkedMap[tpKey][checkId]) || (checkedMap[oldTpKey] && checkedMap[oldTpKey][checkId]);
                         const finalChecked = Boolean(isCheckedNew);
                         if (finalChecked) {
                             localCheckedCount++;
@@ -1149,6 +1148,28 @@ function backgroundSyncChecklist() {
                         checkboxes.forEach(cb => {
                             cb.checked = finalChecked;
                         });
+
+                        // Sync external toggle badge on the card
+                        if (checkId === 't4') {
+                            const externalToggle = card.querySelector('.t4-external-toggle > div');
+                            if (externalToggle) {
+                                const extCb = externalToggle.querySelector('input[type="checkbox"]');
+                                const textSpan = externalToggle.querySelector('.t4-text');
+                                if (extCb) extCb.checked = finalChecked;
+                                
+                                if (finalChecked) {
+                                    externalToggle.style.color = 'var(--primary)';
+                                    externalToggle.style.background = 'rgba(16, 185, 129, 0.1)';
+                                    externalToggle.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                                    if (textSpan) textSpan.textContent = (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'vi') ? 'O: 開始 (Bắt đầu)' : 'O列：開始';
+                                } else {
+                                    externalToggle.style.color = 'var(--text-3)';
+                                    externalToggle.style.background = 'var(--bg-page)';
+                                    externalToggle.style.borderColor = 'var(--border)';
+                                    if (textSpan) textSpan.textContent = (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG === 'vi') ? 'Chưa bắt đầu' : '未着手';
+                                }
+                            }
+                        }
                     }
 
                     // Keep card.dataset.checkedIds in sync so modal reads fresh data
@@ -4616,7 +4637,7 @@ window.toggleExternalStart = function(tpKey, element) {
     }
     
     // Sync with server
-    fetch('/api/checklist_sync', {
+    fetch(typeof CHECKLIST_API_POST !== 'undefined' && CHECKLIST_API_POST ? CHECKLIST_API_POST : '/api/checklist_sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tac_pham: tpKey, checkbox_id: 't4', status: isChecked })

@@ -223,8 +223,7 @@ def load_users_from_sheet(url):
 _checklist_cache = None
 checklist_lock = threading.Lock()
 checklist_version = 0
-
-
+vn_tracking_session = None
 def get_supabase_checklists():
     global _checklist_cache
     if _checklist_cache is not None:
@@ -840,7 +839,8 @@ def process_dashboard_data():
         'users': users,
         'user_profiles': USER_DB,
         'cols_keys': COLS,
-        'checklist_api': '',
+        'checklist_api': '/api/checklist_sync_get',
+        'checklist_api_post': '/api/checklist_sync',
         'checked_ids_dict': checked_ids_dict,
         'filter_cv_nay': list(df_tuan_nay["Công việc"].dropna().unique()) if not df_tuan_nay.empty else [],
         'filter_cv_sau': list(df_tuan_sau["Công việc"].dropna().unique()) if not df_tuan_sau.empty else [],
@@ -890,6 +890,82 @@ def api_checklist_sync_get():
                 'Thời Gian': ''
             })
     return jsonify(rows)
+
+@app.route('/api/vn_checklist_sync_get', methods=['GET'])
+def api_vn_checklist_sync_get():
+    try:
+        VN_SUPABASE_URL = os.environ.get('VN_SUPABASE_URL', '')
+        VN_SUPABASE_SERVICE_KEY = os.environ.get('VN_SUPABASE_SERVICE_KEY', '')
+        VN_SUPABASE_BUCKET = 'drive'
+        headers = {'Authorization': f'Bearer {VN_SUPABASE_SERVICE_KEY}', 'apikey': VN_SUPABASE_SERVICE_KEY}
+        import requests
+        r = requests.get(f'{VN_SUPABASE_URL}/storage/v1/object/{VN_SUPABASE_BUCKET}/_system/checklists.json', headers=headers, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print("Failed to load VN checklist for API:", e)
+        data = {}
+
+    rows = []
+    for tp_key, cbs in data.items():
+        for cb_id, status in cbs.items():
+            rows.append({
+                'Tên Tác Phẩm': tp_key,
+                'Checkbox ID': cb_id,
+                'Trạng Thái': status,
+                'Thời Gian': ''
+            })
+    return jsonify(rows)
+
+@app.route('/api/vn_checklist_sync', methods=['POST'])
+def api_vn_checklist_sync():
+    if not session.get('logged_in'):
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    
+    try:
+        from flask import request
+        import json, requests
+        
+        if request.is_json:
+            req_data = request.get_json()
+        else:
+            req_data = json.loads(request.data)
+            
+        tp_key = req_data.get('tac_pham')
+        cb_id = req_data.get('checkbox_id')
+        status = req_data.get('status')
+        
+        if tp_key and cb_id:
+            global vn_tracking_session
+            if vn_tracking_session is None:
+                vn_tracking_session = requests.Session()
+                USER_DB_VN = load_users_from_sheet(VN_USER_SHEET_URL)
+                if USER_DB_VN:
+                    username = list(USER_DB_VN.keys())[0]
+                    password = USER_DB_VN[username]['password']
+                    vn_tracking_session.post('https://vn-tracking-648124221913.asia-southeast1.run.app/login', data={'username': username, 'password': password})
+            
+            r_sync = vn_tracking_session.post('https://vn-tracking-648124221913.asia-southeast1.run.app/api/checklist_sync', json={'tac_pham': tp_key, 'checkbox_id': cb_id, 'status': status}, timeout=30)
+            
+            if r_sync.status_code == 401:
+                # Session expired or login failed, clear session
+                vn_tracking_session = None
+                return jsonify({"status": "error", "message": "VN Session expired, try again"}), 500
+                
+            r_sync.raise_for_status()
+            
+            socketio.emit('checklist_updated', {
+                'tp_key': tp_key,
+                'cb_id': cb_id,
+                'status': bool(status)
+            })
+            return jsonify({"status": "success", "pet_xp": None, "pet_level_up": False})
+            
+    except Exception as e:
+        print("VN Checklist Sync Error:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+    return jsonify({"status": "error", "message": "Invalid data"}), 400
 
 @app.route('/api/checklist_sync', methods=['POST'])
 def api_checklist_sync():
@@ -3498,7 +3574,8 @@ def process_vn_dashboard_data():
         'users': users,
         'user_profiles': USER_DB,
         'cols_keys': COLS,
-        'checklist_api': '',
+        'checklist_api': '/api/vn_checklist_sync_get',
+        'checklist_api_post': '/api/vn_checklist_sync',
         'checked_ids_dict': checked_ids_dict,
         'filter_cv_nay': list(df_tuan_nay["Công việc"].dropna().unique()) if not df_tuan_nay.empty else [],
         'filter_cv_sau': list(df_tuan_sau["Công việc"].dropna().unique()) if not df_tuan_sau.empty else [],
