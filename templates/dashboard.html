@@ -966,7 +966,7 @@
                 }
 
                 100% {
-                    transform: translateX(-50%);
+                    transform: translateX(-100%);
                 }
             }
 
@@ -1014,6 +1014,7 @@
                 align-items: center;
                 white-space: nowrap;
                 width: max-content;
+                padding-left: 100%;
                 animation: marqueeScroll var(--marquee-duration, 30s) linear infinite;
             }
 
@@ -1071,8 +1072,8 @@
             requestAnimationFrame(() => {
                 const scroll = document.getElementById('aiInsightsScroll');
                 if (scroll) {
-                    const halfWidth = scroll.scrollWidth / 2;
-                    const duration = Math.max(15, halfWidth / 60); // ~60px/s
+                    const width = scroll.scrollWidth;
+                    const duration = Math.max(15, width / 60); // ~60px/s
                     scroll.style.setProperty('--marquee-duration', duration + 's');
                 }
             });
@@ -1187,7 +1188,8 @@
             <span class="deadline-badge" id="deadline-nay-badge" style="cursor: pointer;"
                 onclick="toggleCalendarPopup('{{ weeks.nay.info.deadline }}')">{{ weeks.nay.info.deadline }}</span>
             <div id="calendar-popup"
-                style="display: none; position: absolute; top: 100%; right: 0; z-index: 999; margin-top: 10px; background: var(--surface); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid var(--border); overflow: hidden; width: max-content; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); background-color: color-mix(in srgb, var(--surface) 60%, transparent);">
+                style="display: none; position: absolute; top: 100%; right: 0; z-index: 999; margin-top: 10px; background: var(--surface); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid var(--border); overflow: hidden; width: max-content;
+                padding-left: 100%; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); background-color: color-mix(in srgb, var(--surface) 60%, transparent);">
                 <div style="display: flex; min-width: 460px;">
                     <div
                         style="padding: 20px; width: 140px; border-right: 1px solid var(--border); display: flex; flex-direction: column;">

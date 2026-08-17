@@ -4578,14 +4578,12 @@ async function fetchAiInsights() {
                     </div>
                 `;
             });
-            // Duplicate for seamless loop
-            data.insights.forEach(insight => {
-                container.innerHTML += `
-                    <div class="ai-insight-item">
-                        <span class="ai-insight-dot"></span>
-                        ${insight}
-                    </div>
-                `;
+            
+            // Recalculate duration based on new width
+            requestAnimationFrame(() => {
+                const width = container.scrollWidth;
+                const duration = Math.max(15, width / 60); // ~60px/s
+                container.style.setProperty('--marquee-duration', duration + 's');
             });
         }
     } catch (e) {
